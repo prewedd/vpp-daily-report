@@ -7,7 +7,7 @@ Same pattern as `lead_ingestion`: local Python for dev/testing, Anthropic Cloud 
 ## Architecture
 
 ```
-Claude scheduled agent (weekdays 13:00 Kyiv)
+Claude scheduled agent (weekdays 08:00 Kyiv)
         │
         ▼
   daily_report.py
