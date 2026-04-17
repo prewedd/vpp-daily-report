@@ -100,7 +100,11 @@ def main() -> int:
     client = ClickUpClient(clickup_token)
     events = collect_events(client, target)
 
-    date_label = target.strftime("%a, %b ") + str(target.day)
+    next_day = target + timedelta(days=1)
+    if target.month == next_day.month:
+        date_label = target.strftime("%a, %b ") + f"{target.day}–{next_day.day}"
+    else:
+        date_label = target.strftime("%a, %b ") + f"{target.day} – {next_day.strftime('%b')} {next_day.day}"
     message = build_report(events, date_label)
 
     print(message)
