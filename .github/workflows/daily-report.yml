@@ -1,0 +1,52 @@
+name: VPP Daily Report
+
+on:
+  # Weekdays at 10:00 UTC (13:00 Kyiv in EEST; 12:00 Kyiv in EET winter).
+  # GitHub Actions cron runs in UTC only — adjust this expression when DST flips
+  # if you want the local-time slot to hold.
+  schedule:
+    - cron: "0 10 * * 1-5"
+  # Manual trigger from the Actions tab, with optional overrides.
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Target day (YYYY-MM-DD). Blank = yesterday's workday."
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry-run (don't post to Google Chat)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --quiet requests python-dotenv tzdata
+
+      - name: Run daily report
+        env:
+          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+          CLICKUP_TEAM_ID: ${{ secrets.CLICKUP_TEAM_ID }}
+          CLICKUP_FOLDER_ID: ${{ secrets.CLICKUP_FOLDER_ID }}
+          EDITORS_JSON: ${{ secrets.EDITORS_JSON }}
+          LISTS_JSON: ${{ secrets.LISTS_JSON }}
+          GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+        run: |
+          args=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            args="$args --date ${{ github.event.inputs.date }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            args="$args --dry-run"
+          fi
+          python daily_report.py $args
