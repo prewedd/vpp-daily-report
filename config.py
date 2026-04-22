@@ -42,3 +42,12 @@ SKIP_STATUSES = {
     "finished",
     "to do",
 }
+
+# Ongoing work: task appears in the report every day while in this status, even
+# if nothing changed today. Everything else in STATUS_ACTIONS is a transition
+# event — shown only on the day date_updated falls in the window.
+ONGOING_STATUSES = {
+    "editing",
+    "editing corrections",
+    "in progress",
+}

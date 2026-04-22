@@ -23,7 +23,7 @@ import requests
 from dotenv import load_dotenv
 
 from clickup_client import ClickUpClient
-from config import FOLDER_ID, SKIP_STATUSES, TEAM_ID, TIMEZONE, WORKDAY_START_HOUR
+from config import FOLDER_ID, ONGOING_STATUSES, SKIP_STATUSES, TEAM_ID, TIMEZONE, WORKDAY_START_HOUR
 from report_builder import build_report, resolve_event
 
 
@@ -44,21 +44,34 @@ def workday_window_ms(target_day: date, tz_name: str, start_hour: int) -> tuple[
 def collect_events(client: ClickUpClient, target_day: date) -> list:
     """Return TaskEvents for the given local day.
 
-    We rely on `date_updated` as the activity signal. ClickUp's
-    /task/{id}/time_in_status endpoint returns "No data for TIS" on this
-    workspace's plan, so we can't verify that the status itself changed
-    yesterday (vs. some other edit like a comment). Accepted trade-off:
-    occasional false positives when a task is edited without status change.
-    The workspace's date_status_updated timestamp doesn't exist in the API.
+    Two rules, applied per task:
+    - Ongoing statuses (editing, editing corrections, in progress): always
+      included — the editor is actively working on the task every day it sits
+      in this status, whether or not date_updated touched today's window.
+    - Transition statuses (picked up, sent to client, uploaded, …): included
+      only when date_updated falls in today's workday window — these are
+      one-time hand-off events, not ongoing work.
+
+    (We'd use /task/{id}/time_in_status to verify transitions precisely, but
+    that endpoint returns "No data for TIS" on this workspace's plan.)
     """
     start_ms, end_ms = workday_window_ms(target_day, TIMEZONE, WORKDAY_START_HOUR)
-    tasks = client.search_tasks_in_folder(TEAM_ID, FOLDER_ID, start_ms, end_ms)
+    # Fetch all tasks in the folder (ongoing-status tasks may have an old
+    # date_updated), then apply per-task filtering below.
+    tasks = client.search_tasks_in_folder(TEAM_ID, FOLDER_ID)
 
     events = []
     for task in tasks:
         status_name = ((task.get("status") or {}).get("status") or "").lower()
         if status_name in SKIP_STATUSES or not status_name:
             continue
+        if status_name not in ONGOING_STATUSES:
+            # Transition event — require date_updated in today's window.
+            du_raw = task.get("date_updated")
+            if du_raw is None:
+                continue
+            if not (start_ms <= int(du_raw) < end_ms):
+                continue
         event = resolve_event(task, status_name)
         if event is not None:
             events.append(event)

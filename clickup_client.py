@@ -16,26 +16,29 @@ class ClickUpClient:
         self,
         team_id: str,
         folder_id: str,
-        date_updated_gt_ms: int,
-        date_updated_lt_ms: int,
+        date_updated_gt_ms: int | None = None,
+        date_updated_lt_ms: int | None = None,
     ) -> list[dict]:
-        """Return all tasks in a folder updated within the given ms window.
+        """Return tasks in a folder, optionally filtered by a date_updated window.
 
         Paginates until an empty page comes back.
         """
         tasks: list[dict] = []
         page = 0
         while True:
+            params: dict[str, object] = {
+                "page": page,
+                "project_ids[]": folder_id,
+                "include_closed": "true",
+                "subtasks": "false",
+            }
+            if date_updated_gt_ms is not None:
+                params["date_updated_gt"] = date_updated_gt_ms
+            if date_updated_lt_ms is not None:
+                params["date_updated_lt"] = date_updated_lt_ms
             resp = self.session.get(
                 f"{BASE_URL}/team/{team_id}/task",
-                params={
-                    "page": page,
-                    "project_ids[]": folder_id,
-                    "date_updated_gt": date_updated_gt_ms,
-                    "date_updated_lt": date_updated_lt_ms,
-                    "include_closed": "true",
-                    "subtasks": "false",
-                },
+                params=params,
                 timeout=30,
             )
             resp.raise_for_status()
