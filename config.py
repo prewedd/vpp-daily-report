@@ -1,25 +1,36 @@
-"""Configuration for VPP daily report."""
+"""Configuration for VPP daily report.
 
-TEAM_ID = "90152264233"
-FOLDER_ID = "901513870625"
-TIMEZONE = "Europe/Kyiv"
+Business-specific values (team/folder IDs, editor names, list names) are
+loaded from environment variables so they stay out of source control. See
+.env.example for the expected shape.
+"""
 
-# Report window is [target_day 08:00 Kyiv, target_day+1 08:00 Kyiv), so late-
-# night work (e.g. 02:00 AM) counts toward the previous workday.
-WORKDAY_START_HOUR = 8
+import json
+import os
 
-EDITORS = {
-    "Dima from TLIC": "Dima",
-    "Yuliia": "Yulia",
-}
+from dotenv import load_dotenv
 
-LISTS = {
-    "Couples Projects": "Couples",
-    "Reels": "Reels",
-    "Other projects": "Other",
-}
+load_dotenv()
 
-SECTION_ORDER = ["Couples", "Reels", "Other"]
+
+def _required(name: str) -> str:
+    v = os.environ.get(name)
+    if not v:
+        raise RuntimeError(f"Missing required env var: {name}")
+    return v
+
+
+TEAM_ID = _required("CLICKUP_TEAM_ID")
+FOLDER_ID = _required("CLICKUP_FOLDER_ID")
+TIMEZONE = os.environ.get("TIMEZONE", "Europe/Kyiv")
+WORKDAY_START_HOUR = int(os.environ.get("WORKDAY_START_HOUR", "8"))
+
+# EDITORS_JSON: {"<ClickUp username>": "<display name>"}
+EDITORS: dict[str, str] = json.loads(_required("EDITORS_JSON"))
+# LISTS_JSON: {"<ClickUp list name>": "<section label>"}
+LISTS: dict[str, str] = json.loads(_required("LISTS_JSON"))
+# Section display order, deduped while preserving first-seen order.
+SECTION_ORDER: list[str] = list(dict.fromkeys(LISTS.values()))
 
 STATUS_ACTIONS = {
     "edit que": "picked up",
