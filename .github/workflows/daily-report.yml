@@ -1,11 +1,13 @@
 name: VPP Daily Report
 
 on:
-  # Weekdays at 10:00 UTC (13:00 Kyiv in EEST; 12:00 Kyiv in EET winter).
-  # GitHub Actions cron runs in UTC only — adjust this expression when DST flips
-  # if you want the local-time slot to hold.
+  # Weekdays at 09:45 UTC (12:45 Kyiv in EEST; 11:45 Kyiv in EET winter).
+  # Off the top-of-hour to avoid GitHub Actions' peak-load cron delays —
+  # scheduled jobs at `:00` can slip up to 60 min. With a :45 offset, delivery
+  # lands around 13:00–13:15 Kyiv most days.
+  # Adjust the hour when DST flips if you want the Kyiv slot to hold.
   schedule:
-    - cron: "0 10 * * 1-5"
+    - cron: "45 9 * * 1-5"
   # Manual trigger from the Actions tab, with optional overrides.
   workflow_dispatch:
     inputs:
