@@ -23,7 +23,16 @@ import requests
 from dotenv import load_dotenv
 
 from clickup_client import ClickUpClient
-from config import FOLDER_ID, ONGOING_STATUSES, SKIP_STATUSES, TEAM_ID, TIMEZONE, WORKDAY_START_HOUR
+from config import (
+    DUE_DATE_SECTIONS,
+    FOLDER_ID,
+    LISTS,
+    ONGOING_STATUSES,
+    SKIP_STATUSES,
+    TEAM_ID,
+    TIMEZONE,
+    WORKDAY_START_HOUR,
+)
 from report_builder import build_report, resolve_event
 
 
@@ -44,18 +53,23 @@ def workday_window_ms(target_day: date, tz_name: str, start_hour: int) -> tuple[
 def collect_events(client: ClickUpClient, target_day: date) -> list:
     """Return TaskEvents for the given local day.
 
-    Two rules, applied per task:
-    - Ongoing statuses (editing, editing corrections, in progress): always
-      included — the editor is actively working on the task every day it sits
-      in this status, whether or not date_updated touched today's window.
-    - Transition statuses (picked up, sent to client, uploaded, …): included
-      only when date_updated falls in today's workday window — these are
-      one-time hand-off events, not ongoing work.
+    Three rules, applied per task by section:
+
+    1. Sections in DUE_DATE_SECTIONS (e.g. Reels, Venues) — task is attributed
+       by its ClickUp due_date. The task lands in the report whose target_day
+       matches the due_date in the local timezone. No due_date → skip.
+    2. Other sections, ongoing statuses (editing, editing corrections, in
+       progress) — always included; the editor is actively working on the task
+       every day it sits in this status, regardless of date_updated.
+    3. Other sections, transition statuses (sent to client, uploaded, picked
+       up, …) — included only when date_updated falls in today's workday
+       window. These are one-time hand-off events, not ongoing work.
 
     (We'd use /task/{id}/time_in_status to verify transitions precisely, but
     that endpoint returns "No data for TIS" on this workspace's plan.)
     """
     start_ms, end_ms = workday_window_ms(target_day, TIMEZONE, WORKDAY_START_HOUR)
+    tz = ZoneInfo(TIMEZONE)
     # Fetch all tasks in the folder (ongoing-status tasks may have an old
     # date_updated), then apply per-task filtering below.
     tasks = client.search_tasks_in_folder(TEAM_ID, FOLDER_ID)
@@ -65,13 +79,27 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
         status_name = ((task.get("status") or {}).get("status") or "").lower()
         if status_name in SKIP_STATUSES or not status_name:
             continue
-        if status_name not in ONGOING_STATUSES:
+
+        list_name = (task.get("list") or {}).get("name", "")
+        section = LISTS.get(list_name)
+        if section is None:
+            continue
+
+        if section in DUE_DATE_SECTIONS:
+            due_raw = task.get("due_date")
+            if not due_raw:
+                continue
+            due_local = datetime.fromtimestamp(int(due_raw) / 1000, tz=timezone.utc).astimezone(tz).date()
+            if due_local != target_day:
+                continue
+        elif status_name not in ONGOING_STATUSES:
             # Transition event — require date_updated in today's window.
             du_raw = task.get("date_updated")
             if du_raw is None:
                 continue
             if not (start_ms <= int(du_raw) < end_ms):
                 continue
+
         event = resolve_event(task, status_name)
         if event is not None:
             events.append(event)

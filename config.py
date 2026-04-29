@@ -62,3 +62,9 @@ ONGOING_STATUSES = {
     "editing corrections",
     "in progress",
 }
+
+# Sections (display labels from LISTS) whose tasks are attributed by the task's
+# due_date in ClickUp instead of by status-change activity. The task lands in
+# the report for whichever day its due_date matches in the local timezone.
+# Tasks in these sections without a due_date are skipped.
+DUE_DATE_SECTIONS = {"Reels", "Venues"}
