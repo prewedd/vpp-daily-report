@@ -1,13 +1,14 @@
 name: VPP Daily Report
 
 on:
-  # Weekdays at 09:45 UTC (12:45 Kyiv in EEST; 11:45 Kyiv in EET winter).
+  # Every day at 06:30 UTC (09:30 Kyiv in EEST; 08:30 Kyiv in EET winter).
   # Off the top-of-hour to avoid GitHub Actions' peak-load cron delays —
-  # scheduled jobs at `:00` can slip up to 60 min. With a :45 offset, delivery
-  # lands around 13:00–13:15 Kyiv most days.
+  # scheduled jobs at `:00` can slip up to 60 min. With a :30 offset and the
+  # 09:30 target, delivery typically lands by 10:30 Kyiv, comfortably under the
+  # 10:50 deadline. Runs on weekends too — editors sometimes work Sat/Sun.
   # Adjust the hour when DST flips if you want the Kyiv slot to hold.
   schedule:
-    - cron: "45 9 * * 1-5"
+    - cron: "30 6 * * *"
   # Manual trigger from the Actions tab, with optional overrides.
   workflow_dispatch:
     inputs:
