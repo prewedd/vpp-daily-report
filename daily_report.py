@@ -188,6 +188,12 @@ def main() -> int:
         print("\n[dry-run] not posting", file=sys.stderr)
         return 0
 
+    if not events:
+        # Nothing to report today (empty workday window) — skip posting so the
+        # chat doesn't accumulate "No activity." messages on weekends/holidays.
+        print("\n[empty report] not posting", file=sys.stderr)
+        return 0
+
     post_to_google_chat(webhook_url, message)
     print("\n[posted to Google Chat]", file=sys.stderr)
     return 0
