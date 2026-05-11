@@ -49,6 +49,20 @@ class ClickUpClient:
             page += 1
         return tasks
 
+    def get_task_time_entries(self, task_id: str) -> list[dict]:
+        """Return time-tracking intervals on a task, grouped by user.
+
+        Each item in the list looks like {"user": {...}, "intervals": [...]}
+        where each interval has "start" and "end" as unix-ms strings.
+        Empty list if no time has been tracked.
+        """
+        resp = self.session.get(
+            f"{BASE_URL}/task/{task_id}/time",
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("data", [])
+
     def get_time_in_status(self, task_id: str) -> dict | None:
         """Return time_in_status payload, or None if ClickUp has no TIS data.
 

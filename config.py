@@ -68,3 +68,11 @@ ONGOING_STATUSES = {
 # the report for whichever day its due_date matches in the local timezone.
 # Tasks in these sections without a due_date are skipped.
 DUE_DATE_SECTIONS = {"Reels", "Venues"}
+
+# Sections where a task in an ongoing status is shown ONLY if the assigned
+# editor logged time on the task during the report window. Without time
+# tracking proof, an "editing" task could sit there for weeks and look like
+# someone is actively working on it daily — this filter cuts that noise.
+# Transition events in these sections still show regardless of time tracking
+# (the status change itself is the proof of work).
+TIME_TRACKED_ONGOING_SECTIONS = {"Couples"}

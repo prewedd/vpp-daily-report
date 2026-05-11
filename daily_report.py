@@ -30,6 +30,7 @@ from config import (
     ONGOING_STATUSES,
     SKIP_STATUSES,
     TEAM_ID,
+    TIME_TRACKED_ONGOING_SECTIONS,
     TIMEZONE,
     WORKDAY_START_HOUR,
 )
@@ -99,11 +100,45 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
                 continue
             if not (start_ms <= int(du_raw) < end_ms):
                 continue
+        elif section in TIME_TRACKED_ONGOING_SECTIONS:
+            # Ongoing status in a section that requires time-tracking proof.
+            # Only show this task if the assigned editor logged time on it
+            # during the workday window.
+            assignees = task.get("assignees") or []
+            if not assignees:
+                continue
+            assignee_id = assignees[0].get("id")
+            if not _logged_time_in_window(client, task["id"], assignee_id, start_ms, end_ms):
+                continue
 
         event = resolve_event(task, status_name)
         if event is not None:
             events.append(event)
     return events
+
+
+def _logged_time_in_window(
+    client: ClickUpClient, task_id: str, user_id, start_ms: int, end_ms: int
+) -> bool:
+    """True iff the given user has any time interval overlapping [start, end)."""
+    try:
+        per_user = client.get_task_time_entries(task_id)
+    except Exception:
+        # If the endpoint errors for any reason, fall through to including the
+        # task — better to over-report than to silently drop work.
+        return True
+    for block in per_user:
+        if (block.get("user") or {}).get("id") != user_id:
+            continue
+        for interval in block.get("intervals", []):
+            try:
+                iv_start = int(interval.get("start", 0))
+                iv_end = int(interval.get("end", 0))
+            except (TypeError, ValueError):
+                continue
+            if iv_start < end_ms and iv_end > start_ms:
+                return True
+    return False
 
 
 def post_to_google_chat(webhook_url: str, text: str) -> None:
