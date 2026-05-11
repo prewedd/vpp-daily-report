@@ -18,7 +18,7 @@ def test_same_action_collapses_task_names():
         TaskEvent("Couples", "Dima", "made revisions for", "Jess & Grayson"),
     ]
     out = build_report(events, "Thu, Apr 17")
-    assert "Dima — made revisions for Matt & Teresa · Jess & Grayson" in out
+    assert "Dima — made revisions for Matt & Teresa | Jess & Grayson" in out
 
 
 def test_different_actions_concat_with_separator():
@@ -27,7 +27,7 @@ def test_different_actions_concat_with_separator():
         TaskEvent("Couples", "Yulia", "uploaded", "Diana & Bo"),
     ]
     out = build_report(events, "Thu, Apr 17")
-    assert "Yulia — internal review for Carsyn & Tom · uploaded Diana & Bo" in out
+    assert "Yulia — internal review for Carsyn & Tom | uploaded Diana & Bo" in out
 
 
 def test_inactive_section_hidden_active_section_shows_all_editors():

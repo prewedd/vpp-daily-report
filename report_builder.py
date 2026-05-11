@@ -54,11 +54,11 @@ def build_report(events: list[TaskEvent], date_label: str) -> str:
     Every editor appears in every section; '-' when that editor had no activity
     in that section. Within a section/editor, tasks sharing an action collapse:
 
-        "made revisions for Matt & Teresa · Jess & Grayson"
+        "made revisions for Matt & Teresa | Jess & Grayson"
 
-    Different actions for the same editor concatenate with ' · ':
+    Different actions for the same editor concatenate with ' | ':
 
-        "internal review for Carsyn & Tom · uploaded Diana & Bo"
+        "internal review for Carsyn & Tom | uploaded Diana & Bo"
     """
     # (section, editor, action) -> [task_name, ...]
     buckets: dict[tuple[str, str, str], list[str]] = defaultdict(list)
@@ -92,10 +92,10 @@ def build_report(events: list[TaskEvent], date_label: str) -> str:
                 lines.append(f"{editor} — -")
                 continue
             phrases = [
-                f"{action} {' · '.join(buckets[(section, editor, action)])}"
+                f"{action} {' | '.join(buckets[(section, editor, action)])}"
                 for action in actions
             ]
-            lines.append(f"{editor} — {' · '.join(phrases)}")
+            lines.append(f"{editor} — {' | '.join(phrases)}")
         lines.append("")
     while lines and lines[-1] == "":
         lines.pop()

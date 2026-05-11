@@ -94,7 +94,7 @@ Edit these in `STATUS_ACTIONS`, `SKIP_STATUSES`, and `ONGOING_STATUSES` inside [
 📹 VPP Daily Report — Wed, Apr 15–16
 
 — Couples —
-Dima — continuing work on Matt & Teresa · sent to client Diana & Bo
+Dima — continuing work on Matt & Teresa | sent to client Diana & Bo
 Yulia — making corrections for Brand X
 ```
 
@@ -102,7 +102,7 @@ Rules enforced by `build_report`:
 - Every editor appears in every visible section; `-` when no activity for that pair.
 - Sections without any activity are hidden.
 - Same-action tasks collapse.
-- Different actions concatenate with ` · `.
+- Different actions concatenate with ` | `.
 - Day with no activity across all sections posts `No activity.`
 
 ## Date label & workday window
