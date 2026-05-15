@@ -18,11 +18,18 @@ class TaskEvent:
     task_name: str
 
 
-def resolve_event(task: dict, status_name: str) -> TaskEvent | None:
+def resolve_event(
+    task: dict, status_name: str, action_override: str | None = None
+) -> TaskEvent | None:
     """Map a raw ClickUp task + current status to a display-ready TaskEvent.
 
     Returns None if the task's list, assignee, or status is outside our mapping
     (i.e. this event should not appear in the report).
+
+    action_override forces the action phrase regardless of status — used when a
+    task is included because the editor logged time on it (proven work) but the
+    status has since moved to something whose mapped phrase would misrepresent
+    what they actually did that day.
     """
     list_name = (task.get("list") or {}).get("name", "")
     section = LISTS.get(list_name)
@@ -36,7 +43,7 @@ def resolve_event(task: dict, status_name: str) -> TaskEvent | None:
     if editor is None:
         return None
 
-    action = STATUS_ACTIONS.get(status_name.lower())
+    action = action_override or STATUS_ACTIONS.get(status_name.lower())
     if action is None:
         return None
 

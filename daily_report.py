@@ -29,6 +29,7 @@ from config import (
     LISTS,
     ONGOING_STATUSES,
     SKIP_STATUSES,
+    STATUS_ACTIONS,
     TEAM_ID,
     TIME_TRACKED_ONGOING_SECTIONS,
     TIMEZONE,
@@ -86,6 +87,13 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
         if section is None:
             continue
 
+        du_raw = task.get("date_updated")
+        transition_in_window = (
+            status_name not in ONGOING_STATUSES
+            and du_raw is not None
+            and start_ms <= int(du_raw) < end_ms
+        )
+
         if section in DUE_DATE_SECTIONS:
             due_raw = task.get("due_date")
             if not due_raw:
@@ -93,25 +101,43 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
             due_local = datetime.fromtimestamp(int(due_raw) / 1000, tz=timezone.utc).astimezone(tz).date()
             if due_local != target_day:
                 continue
-        elif status_name not in ONGOING_STATUSES:
-            # Transition event — require date_updated in today's window.
-            du_raw = task.get("date_updated")
-            if du_raw is None:
-                continue
-            if not (start_ms <= int(du_raw) < end_ms):
-                continue
-        elif section in TIME_TRACKED_ONGOING_SECTIONS:
-            # Ongoing status in a section that requires time-tracking proof.
-            # Only show this task if the assigned editor logged time on it
-            # during the workday window.
-            assignees = task.get("assignees") or []
-            if not assignees:
-                continue
-            assignee_id = assignees[0].get("id")
-            if not _logged_time_in_window(client, task["id"], assignee_id, start_ms, end_ms):
-                continue
+            event = resolve_event(task, status_name)
 
-        event = resolve_event(task, status_name)
+        elif section in TIME_TRACKED_ONGOING_SECTIONS:
+            # A status hand-off that happened inside the window is reported as
+            # that transition event.
+            if transition_in_window:
+                event = resolve_event(task, status_name)
+            else:
+                # Otherwise the task only counts if the assigned editor
+                # actually logged time on it during the window. Status may
+                # have since moved on (e.g. editor finished editing late and
+                # sent to review next morning) — credit the work that was
+                # tracked in the window, not wherever the status sits now.
+                assignees = task.get("assignees") or []
+                if not assignees:
+                    continue
+                assignee_id = assignees[0].get("id")
+                if not _logged_time_in_window(client, task["id"], assignee_id, start_ms, end_ms):
+                    continue
+                if status_name in ONGOING_STATUSES:
+                    event = resolve_event(task, status_name)
+                else:
+                    event = resolve_event(
+                        task, status_name, action_override=STATUS_ACTIONS["editing"]
+                    )
+
+        elif status_name not in ONGOING_STATUSES:
+            # Non-time-tracked section, transition event — require
+            # date_updated in today's window.
+            if not transition_in_window:
+                continue
+            event = resolve_event(task, status_name)
+
+        else:
+            # Non-time-tracked section, ongoing status — always include.
+            event = resolve_event(task, status_name)
+
         if event is not None:
             events.append(event)
     return events
