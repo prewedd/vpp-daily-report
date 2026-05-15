@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 
 from clickup_client import ClickUpClient
 from config import (
+    AUTOMATION_COMMENT_USERS,
     DUE_DATE_SECTIONS,
     FOLDER_ID,
     LISTS,
@@ -33,6 +34,7 @@ from config import (
     TEAM_ID,
     TIME_TRACKED_ONGOING_SECTIONS,
     TIMEZONE,
+    TRANSITION_COMMENT_MARKERS,
     WORKDAY_START_HOUR,
 )
 from report_builder import build_report, resolve_event
@@ -101,46 +103,89 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
             due_local = datetime.fromtimestamp(int(due_raw) / 1000, tz=timezone.utc).astimezone(tz).date()
             if due_local != target_day:
                 continue
-            event = resolve_event(task, status_name)
+            ev = resolve_event(task, status_name)
+            if ev is not None:
+                events.append(ev)
 
         elif section in TIME_TRACKED_ONGOING_SECTIONS:
-            # A status hand-off that happened inside the window is reported as
-            # that transition event.
-            if transition_in_window:
-                event = resolve_event(task, status_name)
-            else:
-                # Otherwise the task only counts if the assigned editor
-                # actually logged time on it during the window. Status may
-                # have since moved on (e.g. editor finished editing late and
-                # sent to review next morning) — credit the work that was
-                # tracked in the window, not wherever the status sits now.
-                assignees = task.get("assignees") or []
-                if not assignees:
-                    continue
+            # Two independent signals, either or both may fire for a task:
+            #
+            #  a) Transition hand-offs — detected by the automation's
+            #     announcement comment timestamp (immutable), not date_updated
+            #     (which any later comment/edit overwrites). E.g. the editor
+            #     finishes editing at 02:00 and the "Ready for internal review"
+            #     comment lands at 05:34 — both inside the same workday window.
+            #
+            #  b) Ongoing work — the assigned editor logged time on the task
+            #     during the window. Status may have since moved on; we still
+            #     credit the tracked editing work.
+            # Ongoing work first (chronologically the editing happened before
+            # the hand-off), then the transition announcements.
+            assignees = task.get("assignees") or []
+            if assignees:
                 assignee_id = assignees[0].get("id")
-                if not _logged_time_in_window(client, task["id"], assignee_id, start_ms, end_ms):
-                    continue
-                if status_name in ONGOING_STATUSES:
-                    event = resolve_event(task, status_name)
-                else:
-                    event = resolve_event(
-                        task, status_name, action_override=STATUS_ACTIONS["editing"]
-                    )
+                if _logged_time_in_window(client, task["id"], assignee_id, start_ms, end_ms):
+                    if status_name in ONGOING_STATUSES:
+                        ev = resolve_event(task, status_name)
+                    else:
+                        ev = resolve_event(
+                            task, status_name, action_override=STATUS_ACTIONS["editing"]
+                        )
+                    if ev is not None:
+                        events.append(ev)
+
+            for action in _transition_actions_in_window(
+                client, task["id"], start_ms, end_ms
+            ):
+                ev = resolve_event(task, status_name, action_override=action)
+                if ev is not None:
+                    events.append(ev)
 
         elif status_name not in ONGOING_STATUSES:
             # Non-time-tracked section, transition event — require
             # date_updated in today's window.
             if not transition_in_window:
                 continue
-            event = resolve_event(task, status_name)
+            ev = resolve_event(task, status_name)
+            if ev is not None:
+                events.append(ev)
 
         else:
             # Non-time-tracked section, ongoing status — always include.
-            event = resolve_event(task, status_name)
-
-        if event is not None:
-            events.append(event)
+            ev = resolve_event(task, status_name)
+            if ev is not None:
+                events.append(ev)
     return events
+
+
+def _transition_actions_in_window(
+    client: ClickUpClient, task_id: str, start_ms: int, end_ms: int
+) -> list[str]:
+    """Action phrases for automation transition comments inside the window.
+
+    Scans the task's comments for the TLIC automation's status-change
+    announcements; any whose timestamp falls in [start, end) yields its mapped
+    action. Deduped, in marker order.
+    """
+    try:
+        comments = client.get_task_comments(task_id)
+    except Exception:
+        return []
+    found: list[str] = []
+    for c in comments:
+        if (c.get("user") or {}).get("username") not in AUTOMATION_COMMENT_USERS:
+            continue
+        try:
+            ts = int(c.get("date", 0))
+        except (TypeError, ValueError):
+            continue
+        if not (start_ms <= ts < end_ms):
+            continue
+        text = (c.get("comment_text") or "").strip()
+        for prefix, action in TRANSITION_COMMENT_MARKERS:
+            if text.startswith(prefix) and action not in found:
+                found.append(action)
+    return found
 
 
 def _logged_time_in_window(

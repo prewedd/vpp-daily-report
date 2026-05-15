@@ -76,3 +76,19 @@ DUE_DATE_SECTIONS = {"Reels", "Venues"}
 # Transition events in these sections still show regardless of time tracking
 # (the status change itself is the proof of work).
 TIME_TRACKED_ONGOING_SECTIONS = {"Couples"}
+
+# ClickUp usernames that post automation comments (status-change announcements).
+AUTOMATION_COMMENT_USERS = {"TLIC"}
+
+# For TIME_TRACKED_ONGOING_SECTIONS, transition events are detected by the
+# automation's announcement comment timestamp (immutable) instead of
+# date_updated (overwritten by any later edit). Each entry: the comment text
+# prefix the automation posts → the action phrase to report.
+# NOTE: tied to TLIC's ClickUp automation wording. If those automations change
+# their message text/emoji, update these prefixes.
+TRANSITION_COMMENT_MARKERS = [
+    ("🎬 Ready for internal review", "sent for internal review"),
+    ("🎬 Films have been sent to the couple", "sent to client"),
+    ("🎬 Corrections have been sent to the couple", "sent corrections to client"),
+    ("🎬 Films uploaded to YouTube", "uploaded"),
+]

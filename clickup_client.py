@@ -49,6 +49,19 @@ class ClickUpClient:
             page += 1
         return tasks
 
+    def get_task_comments(self, task_id: str) -> list[dict]:
+        """Return a task's comments (most recent first).
+
+        One page (~25 newest) is enough for a one-day report window — status
+        transitions we care about are always recent relative to the run.
+        """
+        resp = self.session.get(
+            f"{BASE_URL}/task/{task_id}/comment",
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("comments", [])
+
     def get_task_time_entries(self, task_id: str) -> list[dict]:
         """Return time-tracking intervals on a task, grouped by user.
 
