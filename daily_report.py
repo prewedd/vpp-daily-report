@@ -89,6 +89,13 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
         if section is None:
             continue
 
+        # Every known editor among the task's assignees gets considered. A
+        # task assigned to multiple editors (e.g. a meeting) emits one event
+        # per editor; their report lines each pick up the credit.
+        editor_assignees = _known_editor_assignees(task)
+        if not editor_assignees:
+            continue
+
         du_raw = task.get("date_updated")
         transition_in_window = (
             status_name not in ONGOING_STATUSES
@@ -103,9 +110,10 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
             due_local = datetime.fromtimestamp(int(due_raw) / 1000, tz=timezone.utc).astimezone(tz).date()
             if due_local != target_day:
                 continue
-            ev = resolve_event(task, status_name)
-            if ev is not None:
-                events.append(ev)
+            for _id, display in editor_assignees:
+                ev = resolve_event(task, status_name, editor_override=display)
+                if ev is not None:
+                    events.append(ev)
 
         elif section in TIME_TRACKED_ONGOING_SECTIONS:
             # Two independent signals, either or both may fire for a task:
@@ -121,41 +129,63 @@ def collect_events(client: ClickUpClient, target_day: date) -> list:
             #     credit the tracked editing work.
             # Ongoing work first (chronologically the editing happened before
             # the hand-off), then the transition announcements.
-            assignees = task.get("assignees") or []
-            if assignees:
-                assignee_id = assignees[0].get("id")
+            # Time-tracking is per-editor: each known editor on the task gets
+            # "continuing work on" only if they personally logged time.
+            for assignee_id, display in editor_assignees:
                 if _logged_time_in_window(client, task["id"], assignee_id, start_ms, end_ms):
                     if status_name in ONGOING_STATUSES:
-                        ev = resolve_event(task, status_name)
+                        ev = resolve_event(task, status_name, editor_override=display)
                     else:
                         ev = resolve_event(
-                            task, status_name, action_override=STATUS_ACTIONS["editing"]
+                            task, status_name,
+                            action_override=STATUS_ACTIONS["editing"],
+                            editor_override=display,
                         )
                     if ev is not None:
                         events.append(ev)
 
+            # Transition hand-offs credit every assigned editor (it's a team
+            # hand-off, not a single-editor action).
             for action in _transition_actions_in_window(
                 client, task["id"], start_ms, end_ms
             ):
-                ev = resolve_event(task, status_name, action_override=action)
-                if ev is not None:
-                    events.append(ev)
+                for _id, display in editor_assignees:
+                    ev = resolve_event(
+                        task, status_name,
+                        action_override=action,
+                        editor_override=display,
+                    )
+                    if ev is not None:
+                        events.append(ev)
 
         elif status_name not in ONGOING_STATUSES:
             # Non-time-tracked section, transition event — require
             # date_updated in today's window.
             if not transition_in_window:
                 continue
-            ev = resolve_event(task, status_name)
-            if ev is not None:
-                events.append(ev)
+            for _id, display in editor_assignees:
+                ev = resolve_event(task, status_name, editor_override=display)
+                if ev is not None:
+                    events.append(ev)
 
         else:
             # Non-time-tracked section, ongoing status — always include.
-            ev = resolve_event(task, status_name)
-            if ev is not None:
-                events.append(ev)
+            for _id, display in editor_assignees:
+                ev = resolve_event(task, status_name, editor_override=display)
+                if ev is not None:
+                    events.append(ev)
     return events
+
+
+def _known_editor_assignees(task: dict) -> list[tuple]:
+    """Return [(assignee_id, display_name), ...] for assignees we track."""
+    from config import EDITORS as _EDITORS  # local to avoid module reorg
+    result = []
+    for a in task.get("assignees") or []:
+        display = _EDITORS.get(a.get("username", ""))
+        if display:
+            result.append((a.get("id"), display))
+    return result
 
 
 def _transition_actions_in_window(

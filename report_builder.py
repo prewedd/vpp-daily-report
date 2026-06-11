@@ -19,7 +19,10 @@ class TaskEvent:
 
 
 def resolve_event(
-    task: dict, status_name: str, action_override: str | None = None
+    task: dict,
+    status_name: str,
+    action_override: str | None = None,
+    editor_override: str | None = None,
 ) -> TaskEvent | None:
     """Map a raw ClickUp task + current status to a display-ready TaskEvent.
 
@@ -30,18 +33,25 @@ def resolve_event(
     task is included because the editor logged time on it (proven work) but the
     status has since moved to something whose mapped phrase would misrepresent
     what they actually did that day.
+
+    editor_override forces the display-name attribution — used when a task has
+    multiple known editor assignees and we want to emit one event per editor
+    rather than crediting just the first one.
     """
     list_name = (task.get("list") or {}).get("name", "")
     section = LISTS.get(list_name)
     if section is None:
         return None
 
-    assignees = task.get("assignees") or []
-    if not assignees:
-        return None
-    editor = EDITORS.get(assignees[0].get("username", ""))
-    if editor is None:
-        return None
+    if editor_override is not None:
+        editor = editor_override
+    else:
+        assignees = task.get("assignees") or []
+        if not assignees:
+            return None
+        editor = EDITORS.get(assignees[0].get("username", ""))
+        if editor is None:
+            return None
 
     action = action_override or STATUS_ACTIONS.get(status_name.lower())
     if action is None:
